@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Historical Retirement Lab</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <div class="logo"></div>
+          <div>
+            <div class="brand-name">Historical Retirement Lab</div>
+            <div class="brand-sub">Use real history to stress-test plans</div>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <button class="tab active" data-tab="dca">DCA</button>
+          <button class="tab" data-tab="retire">Retirement</button>
+          <button class="tab" data-tab="success">Success by Year</button>
+          <button class="tab" data-tab="inflation">Inflation</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <section class="hero">
+        <div class="hero-card">
+          <h1>Simulate with real history</h1>
+          <p>
+            Backtest dollar-cost averaging and retirement withdrawals using your historical S&P 500 CSV,
+            plus inflation-based buying power conversions using your US inflation CSV.
+          </p>
+          <div class="meta" id="metaBox">Loading datasets…</div>
+        </div>
+      </section>
+
+      <!-- DCA -->
+      <section class="panel active" id="panel-dca">
+        <div class="grid">
+          <div class="card">
+            <h2>DCA monthly</h2>
+            <div class="form">
+              <label>
+                Initial lump sum ($)
+                <input id="dcaLumpSum" type="number" value="0" min="0" step="100" />
+              </label>
+
+              <label>
+                Monthly contribution ($)
+                <input id="dcaMonthly" type="number" value="500" min="1" step="1" />
+              </label>
+
+              <div class="row">
+                <label>
+                  Start month
+                  <input id="dcaStart" type="month" value="1980-01" />
+                </label>
+                <label>
+                  End month
+                  <input id="dcaEnd" type="month" value="2020-12" />
+                </label>
+              </div>
+
+              <div class="hint" id="dcaDateHint"></div>
+
+              <button class="primary" id="runDca">Run DCA</button>
+              <div class="hint">Tip: the date pickers are restricted to your CSV range.</div>
+            </div>
+
+            <div class="stats" id="dcaStats"></div>
+          </div>
+
+          <div class="card">
+            <h2>Portfolio value over time</h2>
+            <canvas id="dcaChart" height="140"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Retirement -->
+      <section class="panel" id="panel-retire">
+        <div class="grid">
+          <div class="card">
+            <h2>Retirement (lump sum + withdrawals)</h2>
+            <div class="form">
+              <label>
+                Initial portfolio ($)
+                <input id="retInitial" type="number" value="1000000" min="1" step="1000" />
+              </label>
+
+              <div class="row">
+                <label>
+                  Start month
+                  <input id="retStart" type="month" value="1980-01" />
+                </label>
+                <label>
+                  Duration (years)
+                  <input id="retYears" type="number" value="30" min="1" step="1" />
+                </label>
+              </div>
+
+              <div class="hint" id="retDateHint"></div>
+
+              <label>
+                Retirement method
+                <select id="retMode">
+                  <option value="percentOfInitial">Fixed % of initial (classic SWR)</option>
+                  <option value="percentOfCurrent">Inflation-adjusted spending (based on initial)</option>
+                  <option value="guardrails">Guardrails</option>
+                </select>
+              </label>
+
+              <!-- Standard percent input -->
+              <div id="retStandardBox">
+                <label id="retWithdrawLabel">
+                  Withdraw rate (% per year)
+                  <input id="retWithdrawValue" type="number" value="4" min="0.01" step="0.01" />
+                </label>
+
+                <details class="more" id="retMore">
+                  <summary>More options</summary>
+                  <div class="more-body">
+                    <div id="retPercentCurrentOptions" class="row" style="display:none">
+                      <label>
+                        Annual inflation assumption (%)
+                        <input id="retPctCurrentIncrease" type="number" value="3" min="-50" step="0.1" />
+                      </label>
+                      <div class="hint inline">
+                        Monthly withdrawal increases using prior month inflation (compounded).
+                      </div>
+                    </div>
+
+                    <div class="hint">
+                      This method sets an initial withdrawal based on the original portfolio, then raises that dollar amount
+                      each month using the inflation assumption—so spending doesn’t shrink when the portfolio drops.
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              <!-- Guardrails inputs -->
+              <div id="retGuardrailsBox" style="display:none">
+                <div class="row">
+                  <label>
+                    Starting withdraw rate (% / yr)
+                    <input id="retGStartPct" type="number" value="4" min="0.01" step="0.01" />
+                  </label>
+                  <label>
+                    Min withdraw rate (% / yr)
+                    <input id="retGMinPct" type="number" value="3" min="0" step="0.01" />
+                  </label>
+                </div>
+
+                <div class="row">
+                  <label>
+                    Max withdraw rate (% / yr)
+                    <input id="retGMaxPct" type="number" value="6" min="0" step="0.01" />
+                  </label>
+                  <label>
+                    Optional min $ withdrawal (per period)
+                    <input id="retGMinDollar" type="number" placeholder="(optional)" min="0" step="1" />
+                  </label>
+                </div>
+
+                <div class="hint">
+                  Guardrails rule: if YTD return &gt; 8% → increase rate; if YTD return &lt; 3% → decrease rate.
+                  (Step size is fixed in code at 0.25 percentage points.)
+                </div>
+              </div>
+
+              <label>
+                Withdrawal frequency
+                <select id="retFreq">
+                  <option value="monthly">Monthly</option>
+                  <option value="annual">Annual (every January)</option>
+                </select>
+              </label>
+
+              <button class="primary" id="runRet">Run retirement</button>
+              <div class="hint">Withdrawals are nominal; inflation-adjusted mode uses the inflation assumption.</div>
+            </div>
+
+            <div class="stats" id="retStats"></div>
+          </div>
+
+          <div class="card">
+            <h2>Value + withdrawals</h2>
+            <canvas id="retChart" height="140"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Success by Year -->
+      <section class="panel" id="panel-success">
+        <div class="grid">
+          <div class="card">
+            <h2>Success rate by retirement year (January starts)</h2>
+            <div class="form">
+              <label>
+                Initial portfolio ($)
+                <input id="sInitial" type="number" value="1000000" min="1" step="1000" />
+              </label>
+
+              <label>
+                Duration (years)
+                <input id="sYears" type="number" value="30" min="1" step="1" />
+              </label>
+
+              <label>
+                Retirement method
+                <select id="sMode">
+                  <option value="percentOfInitial">Fixed % of initial</option>
+                  <option value="percentOfCurrent">Inflation-adjusted spending (based on initial)</option>
+                  <option value="guardrails">Guardrails</option>
+                </select>
+              </label>
+
+              <!-- Standard percent input -->
+              <div id="sStandardBox">
+                <label>
+                  Withdraw rate (% per year)
+                  <input id="sWithdrawValue" type="number" value="4" min="0.01" step="0.01" />
+                </label>
+
+                <details class="more" id="sMore">
+                  <summary>More options</summary>
+                  <div class="more-body">
+                    <div id="sPercentCurrentOptions" class="row" style="display:none">
+                      <label>
+                        Annual inflation assumption (%)
+                        <input id="sPctCurrentIncrease" type="number" value="3" min="-50" step="0.1" />
+                      </label>
+                      <div class="hint inline">
+                        Monthly spending increases using prior month inflation (compounded).
+                      </div>
+                    </div>
+
+                    <div class="hint">
+                      This method uses a planned spending amount based on the original portfolio, and increases it monthly for inflation.
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              <!-- Guardrails inputs -->
+              <div id="sGuardrailsBox" style="display:none">
+                <div class="row">
+                  <label>
+                    Starting withdraw rate (% / yr)
+                    <input id="sGStartPct" type="number" value="4" min="0.01" step="0.01" />
+                  </label>
+                  <label>
+                    Min withdraw rate (% / yr)
+                    <input id="sGMinPct" type="number" value="3" min="0" step="0.01" />
+                  </label>
+                </div>
+
+                <div class="row">
+                  <label>
+                    Max withdraw rate (% / yr)
+                    <input id="sGMaxPct" type="number" value="6" min="0" step="0.01" />
+                  </label>
+                  <label>
+                    Optional min $ withdrawal (per period)
+                    <input id="sGMinDollar" type="number" placeholder="(optional)" min="0" step="1" />
+                  </label>
+                </div>
+
+                <div class="hint">
+                  Guardrails rule: if YTD return &gt; 8% → increase rate; if YTD return &lt; 3% → decrease rate.
+                  (Step size is fixed in code at 0.25 percentage points.)
+                </div>
+              </div>
+
+              <label>
+                Withdrawal frequency
+                <select id="sFreq">
+                  <option value="monthly">Monthly</option>
+                  <option value="annual">Annual</option>
+                </select>
+              </label>
+
+              <button class="primary" id="runSuccess">Run analysis</button>
+              <div class="hint">Computed for every January start year with enough data for the chosen duration.</div>
+            </div>
+
+            <div class="stats" id="successStats"></div>
+          </div>
+
+          <div class="card">
+            <h2>Ending balance by start year</h2>
+            <canvas id="successChart" height="140"></canvas>
+          </div>
+
+          <div class="card span-2">
+            <h2>Per-year results</h2>
+            <div class="table-wrap">
+              <table class="results-table" id="successTable">
+                <thead>
+                  <tr>
+                    <th>Start Year</th>
+                    <th>Passed</th>
+                    <th>Starting Balance</th>
+                    <th>Highest Balance</th>
+                    <th>Lowest Balance</th>
+                    <th>Ending Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="6" class="muted-cell">Run the analysis to populate the table.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Inflation -->
+      <section class="panel" id="panel-inflation">
+        <div class="grid">
+          <div class="card">
+            <h2>Inflation buying power conversion</h2>
+            <div class="form">
+              <label>
+                Amount ($)
+                <input id="infAmount" type="number" value="100000" min="1" step="1" />
+              </label>
+
+              <div class="row">
+                <label>
+                  Start year (assumes January)
+                  <input id="infStartYear" type="number" value="1980" step="1" />
+                </label>
+                <label>
+                  Duration (years, inclusive)
+                  <input id="infYears" type="number" value="20" min="1" step="1" />
+                </label>
+              </div>
+
+              <div class="hint" id="infHint"></div>
+
+              <button class="primary" id="runInflation">Run inflation</button>
+              <div class="hint">
+                Uses the Ave column (annual average inflation %) per year. Assumes the start is January of the chosen year.
+              </div>
+            </div>
+
+            <div class="stats" id="infStats"></div>
+          </div>
+
+          <div class="card">
+            <h2>Buying power over time</h2>
+            <div class="hint" id="infOverallAvg"></div>
+            <canvas id="infChart" height="140"></canvas>
+          </div>
+        </div>
+
+        <div class="section-gap"></div>
+
+        <div class="grid">
+          <div class="card">
+            <h2>All start years (January starts)</h2>
+            <div class="form">
+              <label>
+                Amount ($)
+                <input id="infSweepAmount" type="number" value="100000" min="1" step="1" />
+              </label>
+
+              <label>
+                Duration (years, inclusive)
+                <input id="infSweepYears" type="number" value="20" min="1" step="1" />
+              </label>
+
+              <div class="hint" id="infSweepHint"></div>
+
+              <button class="primary" id="runInflationSweep">Run sweep</button>
+              <div class="hint">
+                For each start year, computes the end-year “future equivalent” (blue bars) and the “real value in start-year dollars”
+                (red line). Assumes January of the start year.
+              </div>
+            </div>
+
+            <div class="stats" id="infSweepStats"></div>
+          </div>
+
+          <div class="card">
+            <h2>End of window by start year</h2>
+            <div class="hint" id="infOverallAvg2"></div>
+            <canvas id="infSweepChart" height="140"></canvas>
+          </div>
+
+          <div class="card span-2">
+            <h2>Per-year inflation sweep results</h2>
+            <div class="table-wrap">
+              <table class="results-table" id="infSweepTable">
+                <thead>
+                  <tr>
+                    <th>Start Year</th>
+                    <th>End Year</th>
+                    <th>Start Amount</th>
+                    <th>End Amount</th>
+                    <th>Cumulative Factor</th>
+                    <th>Avg Inflation (window)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colspan="6" class="muted-cell">Run the sweep to populate the table.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      Built for experimenting. Not financial advice.
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

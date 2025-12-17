@@ -1,0 +1,16 @@
+{
+  "name": "financial-calculator",
+  "version": "1.0.0",
+  "description": "Historical S&P500-based DCA + retirement simulator (Node/Express + vanilla client)",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "csv-parse": "^5.6.0",
+    "express": "^4.19.2",
+    "morgan": "^1.10.0"
+  }
+}
